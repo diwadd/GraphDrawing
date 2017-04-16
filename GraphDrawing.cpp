@@ -13,13 +13,22 @@ const bool VERBOSE_MODE = true;
 using namespace std;
 
 
+class Vertex {
+    public:
+        int x;
+        int y;
+        Vertex() {}
+        Vertex(int tx, int ty): x(tx), y(ty) {}
+};
+
+
 class Edge {
     public:
         int vo; // origin
         int vd; // destination
         double w; // weight
         Edge() {}
-        Edge(int o, int d, double w) : vo(o), vd(d), w(w) {} 
+        Edge(int to, int td, double tw) : vo(to), vd(td), w(tw) {} 
 };
 
 
@@ -51,15 +60,15 @@ void print_matrix(vector<vector<double>> &mr, bool verbose_mode = VERBOSE_MODE) 
     } else {}
 }
 
-double distance(pair<int, int> &vo, pair<int, int> &vd) {
+double distance(Vertex &vo, Vertex &vd) {
 
     // Get distance between two vertexes.
 
-    int vox = vo.first;
-    int voy = vo.second;
+    int vox = vo.x;
+    int voy = vo.y;
 
-    int vdx = vd.first;
-    int vdy = vd.second;
+    int vdx = vd.x;
+    int vdy = vd.y;
 
     double dx2 = (vox - vdx)*(vox - vdx);
     double dy2 = (voy - vdy)*(voy - vdy);
@@ -89,7 +98,7 @@ void base_adjacency_list_rep(vector<vector<Edge>> &bal, int &N, vector<int> &edg
 }
 
 
-void adjustable_adjacency_list_rep(vector<vector<Edge>> &aal, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
+void adjustable_adjacency_list_rep(vector<vector<Edge>> &aal, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
     // Construct a adjustable adjacency list (aal) representation of a graph.
     // In our solution we will try to adjust the aal so it resembles
@@ -127,7 +136,7 @@ void base_matrix_rep(vector<vector<double>> &bmr, vector<int> &edges) {
 }
 
 
-void adjustable_matrix_rep(vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
+void adjustable_matrix_rep(vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
     // Construct a adjustable matrix representation (amr) of a graph.
     // In our solution we will try to adjust the amr so it resembles
@@ -148,7 +157,7 @@ void adjustable_matrix_rep(vector<vector<double>> &amr, vector<vector<Edge>> &ba
 }
 
 
-void refresh_vertex_adjustable_adjacency_list(int &vi, vector<vector<Edge>> &aal, vector<pair<int, int>> &vp) {
+void refresh_vertex_adjustable_adjacency_list(int &vi, vector<vector<Edge>> &aal, vector<Vertex> &vp) {
 
     // This function assumes that the state of vp has changed.
     // The position of one vertex (vi) has changed in vp.
@@ -176,7 +185,7 @@ void refresh_vertex_adjustable_adjacency_list(int &vi, vector<vector<Edge>> &aal
 }
 
 
-void refresh_adjustable_adjacency_list(vector<int> vua, vector<vector<Edge>> &aal, vector<pair<int, int>> &vp) {
+void refresh_adjustable_adjacency_list(vector<int> vua, vector<vector<Edge>> &aal, vector<Vertex> &vp) {
 
     // This function assumes that the state of vp has changed.
     // The positions of vertexes given in the vertex update array (vua)
@@ -190,7 +199,7 @@ void refresh_adjustable_adjacency_list(vector<int> vua, vector<vector<Edge>> &aa
 }
 
 
-void refresh_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
+void refresh_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
     for(int i = 0; i < bal[vi].size(); i++) {
         int vo = bal[vi][i].vo;
@@ -203,7 +212,7 @@ void refresh_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vect
 }
 
 
-void refresh_matrix_rep(vector<int> vua, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
+void refresh_matrix_rep(vector<int> vua, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
     for(int i = 0; i < vua.size(); i++) 
         refresh_vertex_matrix_rep(vua[i], amr, bal, vp);
@@ -247,7 +256,7 @@ double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
 }
 
 
-void initialize_vertex_positions(vector<pair<int, int>> &vp, vector<vector<bool>> &vm) {
+void initialize_vertex_positions(vector<Vertex> &vp, vector<vector<bool>> &vm) {
 
     // Assign random positions to the vertexes.
     // Mark the used positions in vm.
@@ -258,17 +267,17 @@ void initialize_vertex_positions(vector<pair<int, int>> &vp, vector<vector<bool>
 
     for(int i = 0; i < vp.size(); i++) {
         while(true) {        
-            int f = uid(g);
-            int s = uid(g); 
+            int x = uid(g);
+            int y = uid(g); 
 
-            if ((vm[f][s] == true) || (vm[s][f] == true))               
+            if ((vm[x][y] == true) || (vm[y][x] == true))               
                 continue;
 
-            vm[f][s] = true;
-            vm[s][f] = true;
+            vm[x][y] = true;
+            vm[y][x] = true;
 
-            vp[i].first = f;
-            vp[i].second = s;
+            vp[i].x = x;
+            vp[i].y = y;
             break;
 
         } // while end
@@ -277,14 +286,14 @@ void initialize_vertex_positions(vector<pair<int, int>> &vp, vector<vector<bool>
 
 
 
-void dispatch_vertex_positions(vector<int> &ret, vector<pair<int, int>> &vp) {
+void dispatch_vertex_positions(vector<int> &ret, vector<Vertex> &vp) {
 
     // Converts the custom vertex positions representation into
     // the one required by the competition i. e. vector of ints.
 
     for(int i = 0; i < vp.size(); i++) {
-        ret[2*i + 0] = vp[i].first;
-        ret[2*i + 1] = vp[i].second;
+        ret[2*i + 0] = vp[i].x;
+        ret[2*i + 1] = vp[i].y;
     }
 
 }
@@ -304,7 +313,7 @@ class GraphDrawing {
 
 
             //vp - vertex positions
-            vector<pair<int, int>> vp(N);
+            vector<Vertex> vp(N);
 
             // vm - visit matrix
             // Marks the points that have been visited so far.
@@ -330,8 +339,8 @@ class GraphDrawing {
 
             // Changeing the position of vertex 3.
             int index = 4;
-            vp[index].first = 100;
-            vp[index].second = 200;
+            vp[index].x = 100;
+            vp[index].y = 200;
             //refresh_vertex_adjustable_adjacency_list(index, aal, vp);
             //print_adjacency_list(aal);
             refresh_vertex_matrix_rep(index, amr, bal, vp);
@@ -339,10 +348,10 @@ class GraphDrawing {
 
 
             vector<int> vua = {0, 1};
-            vp[vua[0]].first = 300;
-            vp[vua[0]].second = 300;
-            vp[vua[1]].first = 400;
-            vp[vua[1]].second = 400;
+            vp[vua[0]].x = 300;
+            vp[vua[0]].y = 300;
+            vp[vua[1]].x = 400;
+            vp[vua[1]].y = 400;
             //refresh_adjustable_adjacency_list(vua, aal, vp);
             //print_adjacency_list(aal);
             refresh_matrix_rep(vua, amr, bal, vp);
