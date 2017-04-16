@@ -5,48 +5,55 @@
 #include <vector>
 #include <utility>
 #include <random>
+#include <limits>
 
 const int BOARD_SIZE = 700;
+const bool VERBOSE_MODE = true;
 
 using namespace std;
 
 
 class Edge {
     public:
-        int vo;
-        int vd;
-        double w;
+        int vo; // origin
+        int vd; // destination
+        double w; // weight
         Edge() {}
         Edge(int o, int d, double w) : vo(o), vd(d), w(w) {} 
 };
 
 
-void print_adjacency_list(vector<vector<Edge>> &al) {
+void print_adjacency_list(vector<vector<Edge>> &al, bool verbose_mode = VERBOSE_MODE) {
 
-    fprintf(stderr, "Printing adjacency list...\n");
-    for(int i = 0; i < al.size(); i++) {
-        fprintf(stderr, "Vertex %d: ", i);
-        for(int j = 0; j < al[i].size(); j++) {
-            fprintf(stderr, "%d -> %d (%f); ", al[i][j].vo, al[i][j].vd, al[i][j].w);
+    if (verbose_mode == true) {
+        fprintf(stderr, "Printing adjacency list...\n");
+        for(int i = 0; i < al.size(); i++) {
+            fprintf(stderr, "Vertex %d: ", i);
+            for(int j = 0; j < al[i].size(); j++) {
+                fprintf(stderr, "%d -> %d (%f); ", al[i][j].vo, al[i][j].vd, al[i][j].w);
+            }
+            fprintf(stderr, "\n");
         }
-        fprintf(stderr, "\n");
-    }
-
+    } else {}
 }
 
 
-void print_matrix(vector<vector<double>> &mr) {
+void print_matrix(vector<vector<double>> &mr, bool verbose_mode = VERBOSE_MODE) {
 
-    fprintf(stderr, "Printing matrix...\n");
-    for(int i = 0; i < mr.size(); i++) {
-        for(int j = 0; j < mr[i].size(); j++) {
-            fprintf(stderr, "%4.2f ", mr[i][j]);
+    if (verbose_mode == true) {
+        fprintf(stderr, "Printing matrix...\n");
+        for(int i = 0; i < mr.size(); i++) {
+            for(int j = 0; j < mr[i].size(); j++) {
+                fprintf(stderr, "%4.2f ", mr[i][j]);
+            }
+            fprintf(stderr, "\n");
         }
-        fprintf(stderr, "\n");
-    }
+    } else {}
 }
 
 double distance(pair<int, int> &vo, pair<int, int> &vd) {
+
+    // Get distance between two vertexes.
 
     int vox = vo.first;
     int voy = vo.second;
@@ -100,6 +107,7 @@ void adjustable_adjacency_list_rep(vector<vector<Edge>> &aal, vector<vector<Edge
 
 }
 
+
 void base_matrix_rep(vector<vector<double>> &bmr, vector<int> &edges) {
 
     // Construct a base matrix representation of a graph.
@@ -118,7 +126,8 @@ void base_matrix_rep(vector<vector<double>> &bmr, vector<int> &edges) {
 
 }
 
-void adjustable_matrix_repo(vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
+
+void adjustable_matrix_rep(vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
 
     // Construct a adjustable matrix representation (amr) of a graph.
     // In our solution we will try to adjust the amr so it resembles
@@ -136,6 +145,105 @@ void adjustable_matrix_repo(vector<vector<double>> &amr, vector<vector<Edge>> &b
         }
     }
 
+}
+
+
+void refresh_vertex_adjustable_adjacency_list(int &vi, vector<vector<Edge>> &aal, vector<pair<int, int>> &vp) {
+
+    // This function assumes that the state of vp has changed.
+    // The position of one vertex (vi) has changed in vp.
+    // The corresponding weights in aal have to be updated.
+    // This function performs the required update.
+
+    for(int i = 0; i < aal[vi].size(); i++) {
+        int vo = aal[vi][i].vo;
+        int vd = aal[vi][i].vd;
+        
+        double d = distance(vp[vo], vp[vd]);
+        aal[vi][i].w = d;
+
+        for(int j = 0; j < aal[vd].size(); j++) {
+            if (aal[vd][j].vd != vo)
+                continue;
+
+            int vdr = aal[vd][j].vd;
+
+            double dr = distance(vp[vd], vp[vdr]);
+            aal[vd][j].w = dr;
+        } // inner for end
+
+    } // outer for end
+}
+
+
+void refresh_adjustable_adjacency_list(vector<int> vua, vector<vector<Edge>> &aal, vector<pair<int, int>> &vp) {
+
+    // This function assumes that the state of vp has changed.
+    // The positions of vertexes given in the vertex update array (vua)
+    // have been changed.
+    // The corresponding weights in aal have to be updated.
+    // This function performs the required update.
+
+    for(int i = 0; i < vua.size(); i++) 
+        refresh_vertex_adjustable_adjacency_list(vua[i], aal, vp);
+
+}
+
+
+void refresh_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
+
+    for(int i = 0; i < bal[vi].size(); i++) {
+        int vo = bal[vi][i].vo;
+        int vd = bal[vi][i].vd;
+
+        double d = distance(vp[vo], vp[vd]);
+        amr[vo][vd] = d;
+        amr[vd][vo] = d;
+    }
+}
+
+
+void refresh_matrix_rep(vector<int> vua, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<pair<int, int>> &vp) {
+
+    for(int i = 0; i < vua.size(); i++) 
+        refresh_vertex_matrix_rep(vua[i], amr, bal, vp);
+
+}
+
+
+void update_ratios(int &vi, double &min_ratio, double &max_ratio, vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
+
+    //Updates the min_ratio and max_ratio for a given vi vertex.
+
+    // Loop over edges of the vi vertex.
+    for(int j = 0; j < bal[vi].size(); j++) {
+            int vo = bal[vi][j].vo;
+            int vd = bal[vi][j].vd;
+
+            double desired_w = bal[vi][j].w;
+            double current_w = amr[vo][vd];
+            double ratio = current_w/desired_w;
+
+            if (min_ratio > ratio)
+                min_ratio = ratio;
+            if (max_ratio < ratio )
+                max_ratio = ratio;
+    }
+}
+
+
+double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
+
+    // Calculates the overall score given am amr.
+
+    double min_ratio = numeric_limits<double>::max();
+    double max_ratio = -1.0*numeric_limits<double>::max();
+    
+    // Loop over vertexes.
+    for(int i = 0; i < bal.size(); i++)
+        update_ratios(i, min_ratio, max_ratio, amr, bal);
+
+    return min_ratio/max_ratio;
 }
 
 
@@ -164,10 +272,9 @@ void initialize_vertex_positions(vector<pair<int, int>> &vp, vector<vector<bool>
             break;
 
         } // while end
-
     } // for end
-
 }
+
 
 
 void dispatch_vertex_positions(vector<int> &ret, vector<pair<int, int>> &vp) {
@@ -181,6 +288,7 @@ void dispatch_vertex_positions(vector<int> &ret, vector<pair<int, int>> &vp) {
     }
 
 }
+
 
 class GraphDrawing {
     public:
@@ -212,13 +320,38 @@ class GraphDrawing {
 
             //Adjustable matrix
             vector<vector<double>> amr(N, vector<double>(N, 0.0));
-            adjustable_matrix_repo(amr, bal, vp);
+            adjustable_matrix_rep(amr, bal, vp);
             print_matrix(amr);
 
             //Adjustable adjacency list
             vector<vector<Edge>> aal(N, vector<Edge>(0));
             adjustable_adjacency_list_rep(aal, bal, vp);
             print_adjacency_list(aal);
+
+            // Changeing the position of vertex 3.
+            int index = 4;
+            vp[index].first = 100;
+            vp[index].second = 200;
+            //refresh_vertex_adjustable_adjacency_list(index, aal, vp);
+            //print_adjacency_list(aal);
+            refresh_vertex_matrix_rep(index, amr, bal, vp);
+            print_matrix(amr);
+
+
+            vector<int> vua = {0, 1};
+            vp[vua[0]].first = 300;
+            vp[vua[0]].second = 300;
+            vp[vua[1]].first = 400;
+            vp[vua[1]].second = 400;
+            //refresh_adjustable_adjacency_list(vua, aal, vp);
+            //print_adjacency_list(aal);
+            refresh_matrix_rep(vua, amr, bal, vp);
+            print_matrix(amr);
+
+            double score = calculate_score(amr, bal);
+            cerr << "Score: " << score << endl;
+            cerr << "Score: " << score << endl;
+            cerr << "Score: " << score << endl;
 
             vector<int> ret(2*N);
             dispatch_vertex_positions(ret, vp);
