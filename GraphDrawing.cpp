@@ -8,7 +8,7 @@
 #include <limits>
 
 const int BOARD_SIZE = 700;
-const bool VERBOSE_MODE = true;
+const bool VERBOSE_MODE = false;
 
 using namespace std;
 
@@ -19,6 +19,7 @@ class Vertex {
         int y;
         Vertex() {}
         Vertex(int tx, int ty): x(tx), y(ty) {}
+        Vertex(const Vertex &v): x(v.x), y(v.y) {}
 };
 
 
@@ -157,7 +158,9 @@ void adjustable_matrix_rep(vector<vector<double>> &amr, vector<vector<Edge>> &ba
 }
 
 
-void refresh_vertex_adjustable_adjacency_list(int &vi, vector<vector<Edge>> &aal, vector<Vertex> &vp) {
+void update_vertex_adjustable_adjacency_list(int &vi, vector<vector<Edge>> &aal, vector<Vertex> &vp) {
+
+    // update performed for a single vertex!
 
     // This function assumes that the state of vp has changed.
     // The position of one vertex (vi) has changed in vp.
@@ -185,7 +188,7 @@ void refresh_vertex_adjustable_adjacency_list(int &vi, vector<vector<Edge>> &aal
 }
 
 
-void refresh_adjustable_adjacency_list(vector<int> vua, vector<vector<Edge>> &aal, vector<Vertex> &vp) {
+void update_adjustable_adjacency_list(vector<int> vua, vector<vector<Edge>> &aal, vector<Vertex> &vp) {
 
     // This function assumes that the state of vp has changed.
     // The positions of vertexes given in the vertex update array (vua)
@@ -194,12 +197,21 @@ void refresh_adjustable_adjacency_list(vector<int> vua, vector<vector<Edge>> &aa
     // This function performs the required update.
 
     for(int i = 0; i < vua.size(); i++) 
-        refresh_vertex_adjustable_adjacency_list(vua[i], aal, vp);
+        update_vertex_adjustable_adjacency_list(vua[i], aal, vp);
 
 }
 
 
-void refresh_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
+void update_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
+
+    // update performed for a single vertex!
+
+    // This function assumes that the state of vp has changed.
+    // The position of one vertex (vi) has changed in vp.
+    // The corresponding weights in amr have to be updated.
+    // This function performs the required update.
+    // In its operation it is analogous to
+    // update_vertex_adjustable_adjacency_list.
 
     for(int i = 0; i < bal[vi].size(); i++) {
         int vo = bal[vi][i].vo;
@@ -212,10 +224,18 @@ void refresh_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vect
 }
 
 
-void refresh_matrix_rep(vector<int> vua, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
+void update_matrix_rep(vector<int> vua, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
+
+    // This function assumes that the state of vp has changed.
+    // The positions of vertexes given in the vertex update array (vua)
+    // have been changed.
+    // The corresponding weights in amr have to be updated.
+    // This function performs the required update.
+    // In its operation it is analogous to
+    // update_adjustable_adjacency_list.
 
     for(int i = 0; i < vua.size(); i++) 
-        refresh_vertex_matrix_rep(vua[i], amr, bal, vp);
+        update_vertex_matrix_rep(vua[i], amr, bal, vp);
 
 }
 
@@ -244,10 +264,10 @@ void update_ratios(int &vi, double &min_ratio, double &max_ratio, vector<vector<
 double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
 
     // Calculates the overall score given am amr.
-
+    
     double min_ratio = numeric_limits<double>::max();
     double max_ratio = -1.0*numeric_limits<double>::max();
-    
+
     // Loop over vertexes.
     for(int i = 0; i < bal.size(); i++)
         update_ratios(i, min_ratio, max_ratio, amr, bal);
@@ -270,6 +290,8 @@ void initialize_vertex_positions(vector<Vertex> &vp, vector<vector<bool>> &vm) {
             int x = uid(g);
             int y = uid(g); 
 
+            // Two vertexes cannot occupy the same possition.
+            // Check if the drawn points are not occupied.
             if ((vm[x][y] == true) || (vm[y][x] == true))               
                 continue;
 
@@ -284,6 +306,176 @@ void initialize_vertex_positions(vector<Vertex> &vp, vector<vector<bool>> &vm) {
     } // for end
 }
 
+bool random_vertex_position_update(Vertex &v, vector<vector<bool>> &vm) {
+
+    // Move vertex to a new position.
+    // The move is performed by drawing a random shift
+    // from {-1, 0, 1} X {-1, 0, 1}.
+
+    random_device rd;
+    mt19937 g(rd());
+    uniform_int_distribution<> uid(-1, 1);
+    
+    int dx = uid(g);
+    int dy = uid(g);
+
+    if ((dx == 0) && (dy == 0))
+        return false;
+
+    int nx = v.x + dx;
+    int ny = v.y + dy;
+
+    if ((nx > BOARD_SIZE - 1) || (nx < 0))
+        return false;
+
+    if ((ny > BOARD_SIZE - 1) || (ny < 0))
+        return false;
+    
+    if (vm[nx][ny] == true || vm[ny][nx] == true)
+        return false;
+
+    v.x = nx;	
+    v.y = ny;
+
+    return true;
+}
+
+
+void random_vertex_move(int &vi, 
+                 vector<vector<double>> &amr,
+                 vector<vector<Edge>> &bal, 
+                 vector<Vertex> &vp,
+                 vector<vector<bool>> &vm) {
+
+    // Move vertex vi to a new position within the (BOARD_SIZE x BOARD_SIZE) grid.
+    // When the vertex is moved the following need to be updated:
+    // - the adjustable matrix representation (amr)
+    // - the adjustable adjacency list (aal)
+    // - the min_ratio
+    // - the max_ratio
+    // At the moment the aal is not used an so it is not updated.
+
+    bool made_move = false;
+    made_move = random_vertex_position_update(vp[vi], vm);
+
+    if (made_move == true) {
+        update_vertex_matrix_rep(vi, amr, bal, vp);
+        //update_ratios(vi, amr, bal);
+    }
+
+}
+
+
+bool deterministic_vertex_position_update(Vertex &v, int &nx, int &ny, vector<vector<bool>> &vm) {
+
+    // Move vertex to a new position given by (nx, ny).
+
+    if ((vm[nx][ny] == true) || (vm[ny][nx] == true))
+        return false;
+
+    v.x = nx;
+    v.y = ny;
+
+    return true;
+}
+
+
+void deterministic_vertex_move(int &vi,
+                               int &nx,
+                               int &ny, 
+                               vector<vector<double>> &amr,
+                               vector<vector<Edge>> &bal, 
+                               vector<Vertex> &vp,
+                               vector<vector<bool>> &vm) {
+
+    // Moves vertex vi to a new position given by (x, y).
+    // The adjustable matrix representation (amr) is updated.
+
+    deterministic_vertex_position_update(vp[vi], nx, ny, vm);
+    update_vertex_matrix_rep(vi, amr, bal, vp);
+}
+
+
+double metropolis_ratio(double &ns, double &os, double &T) {
+
+    // ns - new score
+    // os - old score
+    // T - temperature
+
+    return exp( (ns - os) / T );
+}
+
+
+vector<Vertex> sa(vector<Vertex> &vp, 
+                  vector<vector<double>> &amr, 
+                  vector<vector<Edge>> &bal,
+                  vector<vector<bool>> &vm) {
+    
+    int N = vp.size();
+    vector<Vertex> optimal_solution(vp); // optimal solution
+
+    random_device rd;
+    mt19937 g(rd());
+    uniform_int_distribution<> choose_vertex(0, N - 1);
+    uniform_int_distribution<> choose_grid_coordinate(0, N - 1);
+    uniform_real_distribution<> uniform(0.0, 1.0);
+
+    double T = 10.0; // temperature
+    double tT = 0.1; // termination temperature
+    double tdr = 0.8; // temperature decrease rate    
+    double nI = 10000; // number of iterations per temperature step
+
+    double maximal_score = 0.0; 
+
+    fprintf(stderr, "maximal_score = %f\n", maximal_score);
+    while(T > 0.1) {
+
+        for(int i = 0; i < nI; i++) {
+
+            double os = calculate_score(amr, bal); // old score
+
+            int vi = choose_vertex(g);            
+            int ox = vp[vi].x;
+            int oy = vp[vi].y;
+            bool made_move = random_vertex_position_update(vp[vi], vm);
+
+            if (made_move == true)            
+                update_vertex_matrix_rep(vi, amr, bal, vp);
+            else
+                continue;
+
+            double ns = calculate_score(amr, bal);
+
+            double p = metropolis_ratio(ns, os, T);
+
+            if ( p > uniform(g) ) {
+
+                // Update optimal solution                 
+                if ( maximal_score < ns ) {
+                    maximal_score = ns;
+                    optimal_solution = vp;
+                }
+     
+            } else {
+                // New state not accepted.
+                // Revert back to old state.
+                vp[vi].x = ox;
+                vp[vi].y = oy;
+                update_vertex_matrix_rep(vi, amr, bal, vp);
+            } // outer if end
+
+        } // for loop end
+
+        fprintf(stderr, "---->   ===   <----");
+        fprintf(stderr, "T = %f\n", T);
+        fprintf(stderr, "maximal_score = %f\n", maximal_score);
+
+        T = T*tdr;
+    } // while loop end
+
+    return optimal_solution;
+
+}
 
 
 void dispatch_vertex_positions(vector<int> &ret, vector<Vertex> &vp) {
@@ -337,13 +529,15 @@ class GraphDrawing {
             adjustable_adjacency_list_rep(aal, bal, vp);
             print_adjacency_list(aal);
 
+
+            /*
             // Changeing the position of vertex 3.
             int index = 4;
             vp[index].x = 100;
             vp[index].y = 200;
-            //refresh_vertex_adjustable_adjacency_list(index, aal, vp);
+            //update_vertex_adjustable_adjacency_list(index, aal, vp);
             //print_adjacency_list(aal);
-            refresh_vertex_matrix_rep(index, amr, bal, vp);
+            update_vertex_matrix_rep(index, amr, bal, vp);
             print_matrix(amr);
 
 
@@ -352,18 +546,39 @@ class GraphDrawing {
             vp[vua[0]].y = 300;
             vp[vua[1]].x = 400;
             vp[vua[1]].y = 400;
-            //refresh_adjustable_adjacency_list(vua, aal, vp);
+            //update_adjustable_adjacency_list(vua, aal, vp);
             //print_adjacency_list(aal);
-            refresh_matrix_rep(vua, amr, bal, vp);
+            update_matrix_rep(vua, amr, bal, vp);
             print_matrix(amr);
 
             double score = calculate_score(amr, bal);
-            cerr << "Score: " << score << endl;
-            cerr << "Score: " << score << endl;
-            cerr << "Score: " << score << endl;
+            fprintf(stderr, "-----\n"); 
+            fprintf(stderr, "Score = %4.16f\n", score);
+            fprintf(stderr, "Score = %4.16f\n", score);
+            fprintf(stderr, "Score = %4.16f\n", score);
+
+            index = 3;
+            random_vertex_move(index, amr, bal, vp, vm);
+            score = calculate_score(amr, bal);
+            fprintf(stderr, "-----\n"); 
+            fprintf(stderr, "Score = %4.16f\n", score);
+            fprintf(stderr, "Score = %4.16f\n", score);
+            fprintf(stderr, "Score = %4.16f\n", score);
+
+            int nx = 699;
+            int ny = 699;
+            deterministic_vertex_move(index, nx, ny, amr, bal, vp, vm); 
+            score = calculate_score(amr, bal);
+            fprintf(stderr, "-----\n");            
+            fprintf(stderr, "Score = %4.16f\n", score);
+            fprintf(stderr, "Score = %4.16f\n", score);
+            fprintf(stderr, "Score = %4.16f\n", score);
+            */
+
+            vector<Vertex> optimal_solution = sa(vp, amr, bal, vm);
 
             vector<int> ret(2*N);
-            dispatch_vertex_positions(ret, vp);
+            dispatch_vertex_positions(ret, optimal_solution);
             return ret;
         }
 };
