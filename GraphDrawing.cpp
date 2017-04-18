@@ -6,6 +6,7 @@
 #include <utility>
 #include <random>
 #include <limits>
+#include <chrono>
 
 const int BOARD_SIZE = 700;
 const bool VERBOSE_MODE = false;
@@ -75,11 +76,12 @@ double distance(Vertex &vo, Vertex &vd) {
     double dy2 = (voy - vdy)*(voy - vdy);
 
     double d = sqrt( dx2 + dy2 );
+    //double d = abs(vox - vdx) + abs(voy - vdy);
     return d;
 }
 
 
-void base_adjacency_list_rep(vector<vector<Edge>> &bal, int &N, vector<int> &edges) {
+void base_adjacency_list_rep(vector<vector<Edge>> &bal, vector<int> &edges) {
 
     // Construct a base adjacency list (bal) representation of a graph.
     // This function is used only for the initial graph i. e.
@@ -255,13 +257,98 @@ void update_ratios(int &vi, double &min_ratio, double &max_ratio, vector<vector<
 
             if (min_ratio > ratio)
                 min_ratio = ratio;
-            if (max_ratio < ratio )
+            if (max_ratio < ratio)
                 max_ratio = ratio;
     }
 }
 
 
-double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
+void update_ratios_pass(int &vi, 
+                        double &min_ratio, 
+                        int &min_x,
+                        int &min_y,
+                        double &max_ratio,
+                        int &max_x,
+                        int &max_y,
+                        vector<vector<double>> &amr, 
+                        vector<vector<Edge>> &bal) {
+
+    //Updates the min_ratio and max_ratio for a given vi vertex.
+
+    // Loop over edges of the vi vertex.
+    for(int j = 0; j < bal[vi].size(); j++) {
+            int vo = bal[vi][j].vo;
+            int vd = bal[vi][j].vd;
+
+            double desired_w = bal[vi][j].w;
+            double current_w = amr[vo][vd];
+            double ratio = current_w/desired_w;
+
+            if (min_ratio > ratio) {
+                min_ratio = ratio;
+                min_x = vo;
+                min_y = vd;
+            }
+            if (max_ratio < ratio) {
+                max_ratio = ratio;
+                max_x = vo;
+                max_y = vd;
+            }
+
+    }
+}
+
+
+void update_ratios_pass_global_detect(int &vi, 
+                                      double &min_ratio, 
+                                      int &min_x,
+                                      int &min_y,
+                                      int &old_min_x,
+                                      int &old_min_y,
+                                      double &max_ratio,
+                                      int &max_x,
+                                      int &max_y,
+                                      int &old_max_x,
+                                      int &old_max_y,
+                                      vector<vector<double>> &amr, 
+                                      vector<vector<Edge>> &bal,
+                                      bool &min_is_global,
+                                      bool &max_is_global) {
+
+    //Updates the min_ratio and max_ratio for a given vi vertex.
+
+    // Loop over edges of the vi vertex.
+    for(int j = 0; j < bal[vi].size(); j++) {
+            int vo = bal[vi][j].vo;
+            int vd = bal[vi][j].vd;
+
+            double desired_w = bal[vi][j].w;
+            double current_w = amr[vo][vd];
+            double ratio = current_w/desired_w;
+
+            if ((old_min_x == vo) && (old_min_y == vd))
+                min_is_global = false;
+
+            if ((old_max_x == vo) && (old_max_y == vd))
+                max_is_global = false;
+
+            if (min_ratio > ratio) {
+                min_ratio = ratio;
+                min_x = vo;
+                min_y = vd;
+            }
+
+            if (max_ratio < ratio) {
+                max_ratio = ratio;
+                max_x = vo;
+                max_y = vd;
+            }
+
+    }
+}
+
+
+pair<double, double> calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
 
     // Calculates the overall score given am amr.
     
@@ -271,6 +358,25 @@ double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
     // Loop over vertexes.
     for(int i = 0; i < bal.size(); i++)
         update_ratios(i, min_ratio, max_ratio, amr, bal);
+
+    return make_pair(min_ratio, max_ratio);
+}
+
+
+double calculate_score_ratio_pass(double &min_ratio, 
+                                  int &min_x,
+                                  int &min_y,
+                                  double &max_ratio,
+                                  int &max_x,
+                                  int &max_y, 
+                                  vector<vector<double>> &amr, 
+                                  vector<vector<Edge>> &bal) {
+
+    // Calculates the overall score given am amr.
+
+    // Loop over vertexes.
+    for(int i = 0; i < bal.size(); i++)
+        update_ratios_pass(i, min_ratio, min_x, min_y, max_ratio, max_x, max_y, amr, bal);
 
     return min_ratio/max_ratio;
 }
@@ -306,15 +412,35 @@ void initialize_vertex_positions(vector<Vertex> &vp, vector<vector<bool>> &vm) {
     } // for end
 }
 
-bool random_vertex_position_update(Vertex &v, vector<vector<bool>> &vm) {
+
+bool approve_visit(int &ox, int &oy, int &nx, int &ny, vector<vector<bool>> &vm) {
+
+    // Check is it is possible to move a vertex with coordinates (ox, oy) 
+    // to a new position (nx, ny).
+    // If yes update the vm matrix.
+
+    if (vm[nx][ny] == true || vm[ny][nx] == true)
+        return false;
+
+    vm[ox][oy] = false;
+    vm[oy][ox] = false;
+
+    vm[nx][ny] = true;
+    vm[ny][nx] = true;    
+
+    return true;
+}
+
+
+bool random_vertex_position_update(Vertex &v, vector<vector<bool>> &vm, int &lb, int &rb) {
 
     // Move vertex to a new position.
     // The move is performed by drawing a random shift
-    // from {-1, 0, 1} X {-1, 0, 1}.
+    // from [lb, rb] X [lb, rb].
 
     random_device rd;
     mt19937 g(rd());
-    uniform_int_distribution<> uid(-1, 1);
+    uniform_int_distribution<> uid(lb, rb);
     
     int dx = uid(g);
     int dy = uid(g);
@@ -331,13 +457,37 @@ bool random_vertex_position_update(Vertex &v, vector<vector<bool>> &vm) {
     if ((ny > BOARD_SIZE - 1) || (ny < 0))
         return false;
     
-    if (vm[nx][ny] == true || vm[ny][nx] == true)
+    bool apv = approve_visit(v.x, v.y, nx, ny, vm);
+
+    if (apv == true) {
+        v.x = nx;
+        v.y = ny;
+        return true;
+    } else
+        return false;
+}
+
+
+bool random_vertex_teleport(Vertex &v, vector<vector<bool>> &vm) {
+
+    // Moves the vertex to a random position on the board.
+
+    random_device rd;
+    mt19937 g(rd());
+    uniform_int_distribution<> uid(0, BOARD_SIZE - 1);
+    
+    int nx = uid(g);
+    int ny = uid(g);
+    
+    bool apv = approve_visit(v.x, v.y, nx, ny, vm);
+
+    if (apv == true) {
+        v.x = nx;
+        v.y = ny;
+        return true;
+    } else
         return false;
 
-    v.x = nx;	
-    v.y = ny;
-
-    return true;
 }
 
 
@@ -345,7 +495,9 @@ void random_vertex_move(int &vi,
                  vector<vector<double>> &amr,
                  vector<vector<Edge>> &bal, 
                  vector<Vertex> &vp,
-                 vector<vector<bool>> &vm) {
+                 vector<vector<bool>> &vm,
+                 int &lb,
+                 int &rb) {
 
     // Move vertex vi to a new position within the (BOARD_SIZE x BOARD_SIZE) grid.
     // When the vertex is moved the following need to be updated:
@@ -356,7 +508,7 @@ void random_vertex_move(int &vi,
     // At the moment the aal is not used an so it is not updated.
 
     bool made_move = false;
-    made_move = random_vertex_position_update(vp[vi], vm);
+    made_move = random_vertex_position_update(vp[vi], vm, lb, rb);
 
     if (made_move == true) {
         update_vertex_matrix_rep(vi, amr, bal, vp);
@@ -396,7 +548,7 @@ void deterministic_vertex_move(int &vi,
 }
 
 
-double metropolis_ratio(double &ns, double &os, double &T) {
+inline double metropolis_ratio(double &ns, double &os, double &T) {
 
     // ns - new score
     // os - old score
@@ -406,10 +558,70 @@ double metropolis_ratio(double &ns, double &os, double &T) {
 }
 
 
+void adjust_min_ratio(double &old_min_ratio, 
+                      int &old_min_x, 
+                      int &old_min_y, 
+                      double &min_ratio, 
+                      int &min_x, 
+                      int &min_y,
+                      bool &min_is_global) {
+
+    if (min_ratio <= old_min_ratio) {
+        //fprintf(stderr, "min one\n");        
+        return;
+    }
+
+    if ((min_ratio > old_min_ratio) && (min_is_global == true)) {
+        //fprintf(stderr, "min two\n");  
+        min_ratio = old_min_ratio;
+        min_x = old_min_x;
+        min_y = old_min_y;
+        return;
+    }
+
+    if ((min_ratio > old_min_ratio) && (min_is_global == false)) {
+        //fprintf(stderr, "min three\n");  
+        return;
+    }
+
+}
+
+
+void adjust_max_ratio(double &old_max_ratio, 
+                      int &old_max_x, 
+                      int &old_max_y, 
+                      double &max_ratio, 
+                      int &max_x, 
+                      int &max_y,
+                      bool &max_is_global) {
+
+    if (max_ratio >= old_max_ratio) {
+        //fprintf(stderr, "max one\n");      
+        return;
+    }
+
+    if ((max_ratio < old_max_ratio) && (max_is_global == true)) {
+        //fprintf(stderr, "max two\n");
+        max_ratio = old_max_ratio;
+        max_x = old_max_x;
+        max_y = old_max_y;
+        return;
+    }
+
+    if ((max_ratio < old_max_ratio) && (max_is_global == false)) {
+        //fprintf(stderr, "max three\n");
+        return;
+    }
+
+}
+
+
 vector<Vertex> sa(vector<Vertex> &vp, 
                   vector<vector<double>> &amr, 
                   vector<vector<Edge>> &bal,
-                  vector<vector<bool>> &vm) {
+                  vector<vector<bool>> &vm,
+                  int &lb,
+                  int &rb) {
     
     int N = vp.size();
     vector<Vertex> optimal_solution(vp); // optimal solution
@@ -420,55 +632,143 @@ vector<Vertex> sa(vector<Vertex> &vp,
     uniform_int_distribution<> choose_grid_coordinate(0, N - 1);
     uniform_real_distribution<> uniform(0.0, 1.0);
 
-    double T = 10.0; // temperature
+    double T = 20.0; // temperature
     double tT = 0.1; // termination temperature
-    double tdr = 0.8; // temperature decrease rate    
-    double nI = 10000; // number of iterations per temperature step
+    double tdr = 0.9; // temperature decrease rate    
+    double nI = 100000; // number of iterations per temperature step
 
-    double maximal_score = 0.0; 
+    pair<double, double> p_os = calculate_score(amr, bal); // old score
+    double os = p_os.first/p_os.second;
 
-    fprintf(stderr, "maximal_score = %f\n", maximal_score);
-    while(T > 0.1) {
+    double old_min_ratio = numeric_limits<double>::max();
+    double old_max_ratio = -1.0*numeric_limits<double>::max();
+    int old_min_x = -1;
+    int old_min_y = -1;
+    int old_max_x = -1;
+    int old_max_y = -1;
+
+    double os_t = calculate_score_ratio_pass(old_min_ratio, old_min_x, old_min_y, old_max_ratio, old_max_x, old_max_y, amr, bal); 
+
+    double maximal_score = 0.0;
+
+    //fprintf(stderr, "maximal_score = %f\n", maximal_score);
+    while(T > tT) {
+
+        chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
 
         for(int i = 0; i < nI; i++) {
-
-            double os = calculate_score(amr, bal); // old score
 
             int vi = choose_vertex(g);            
             int ox = vp[vi].x;
             int oy = vp[vi].y;
-            bool made_move = random_vertex_position_update(vp[vi], vm);
+            bool made_move = random_vertex_position_update(vp[vi], vm, lb, rb);
 
             if (made_move == true)            
                 update_vertex_matrix_rep(vi, amr, bal, vp);
             else
                 continue;
 
-            double ns = calculate_score(amr, bal);
+            double min_ratio = numeric_limits<double>::max();
+            double max_ratio = -1.0*numeric_limits<double>::max();
+            int min_x = old_min_x;
+            int min_y = old_min_y;
+            int max_x = old_max_x;
+            int max_y = old_max_y;
+            bool min_is_global = true;
+            bool max_is_global = true;
 
-            double p = metropolis_ratio(ns, os, T);
+            update_ratios_pass_global_detect(vi, 
+                                             min_ratio, 
+                                             min_x,
+                                             min_y,
+                                             old_min_x,
+                                             old_min_y,
+                                             max_ratio,
+                                             max_x,
+                                             max_y,
+                                             old_max_x,
+                                             old_max_y,
+                                             amr, 
+                                             bal,
+                                             min_is_global,
+                                             max_is_global);
+
+            //fprintf(stderr, "=========================================================\n");
+            //fprintf(stderr, "  old           min_ratio: %f max_ratio: %f\n", old_min_ratio, old_max_ratio);
+            //fprintf(stderr, "  pre new       min_ratio: %f max_ratio: %f\n", min_ratio, max_ratio);
+
+            adjust_min_ratio(old_min_ratio, 
+                             old_min_x, 
+                             old_min_y, 
+                             min_ratio, 
+                             min_x, 
+                             min_y,
+                             min_is_global);
+
+            adjust_max_ratio(old_max_ratio, 
+                             old_max_x, 
+                             old_max_y, 
+                             max_ratio, 
+                             max_x, 
+                             max_y,
+                             max_is_global);
+
+
+            //double ns = calculate_score(amr, bal);
+
+
+            //pair<double, double> p_ns = calculate_score(amr, bal);
+            //double ns = p_ns.first/p_ns.second;
+
+            double ns_t = min_ratio/max_ratio;
+            //fprintf(stderr, "ns   = %f min_ratio: %f max_ratio: %f\n", ns, p_ns.first, p_ns.second);
+            //fprintf(stderr, "ns_t = %f min_ratio: %f max_ratio: %f\n", ns_t, min_ratio, max_ratio);
+
+
+            double p = metropolis_ratio(ns_t, os_t, T);
 
             if ( p > uniform(g) ) {
 
+                //os = ns;
+                
+                old_min_ratio = min_ratio;
+                old_max_ratio = max_ratio;
+                old_min_x = min_x;
+                old_min_y = min_y;
+                old_max_x = max_x;
+                old_max_y = max_y;
+
+                os_t = old_min_ratio/old_max_ratio;
+
                 // Update optimal solution                 
-                if ( maximal_score < ns ) {
-                    maximal_score = ns;
+                if ( maximal_score < ns_t ) {
+                    maximal_score = ns_t;
                     optimal_solution = vp;
                 }
      
             } else {
                 // New state not accepted.
                 // Revert back to old state.
+
+                // Revert true/false in vm.
+                approve_visit(vp[vi].x, vp[vi].y, ox, oy, vm);
                 vp[vi].x = ox;
                 vp[vi].y = oy;
                 update_vertex_matrix_rep(vi, amr, bal, vp);
+
+
             } // outer if end
 
         } // for loop end
 
+
+        chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+        int elapsed_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();        
+
         fprintf(stderr, "---->   ===   <----");
         fprintf(stderr, "T = %f\n", T);
         fprintf(stderr, "maximal_score = %f\n", maximal_score);
+        fprintf(stderr, "Time: %d ms\n", elapsed_time);
 
         T = T*tdr;
     } // while loop end
@@ -516,7 +816,7 @@ class GraphDrawing {
             initialize_vertex_positions(vp, vm);
 
             vector<vector<Edge>> bal(N, vector<Edge>(0));
-            base_adjacency_list_rep(bal, N, edges);
+            base_adjacency_list_rep(bal, edges);
             print_adjacency_list(bal);
 
             //Adjustable matrix
@@ -575,7 +875,9 @@ class GraphDrawing {
             fprintf(stderr, "Score = %4.16f\n", score);
             */
 
-            vector<Vertex> optimal_solution = sa(vp, amr, bal, vm);
+            int lb = -10;
+            int rb = 10;
+            vector<Vertex> optimal_solution = sa(vp, amr, bal, vm, lb, rb);
 
             vector<int> ret(2*N);
             dispatch_vertex_positions(ret, optimal_solution);
