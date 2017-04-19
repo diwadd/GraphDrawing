@@ -338,16 +338,16 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
     double T = 10.0; // temperature
     double tT = 0.1; // termination temperature
-    double tdr = 0.9; // temperature decrease rate    
+    double tdr = 0.5; // temperature decrease rate    
     double nI = 10000; // number of iterations per temperature step
 
     double os = calculate_score(amr, bal); // old score
     double maximal_score = 0.0;
 
     //fprintf(stderr, "maximal_score = %f\n", maximal_score);
-    while(T > tT) {
 
-        chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+    chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
+    while(T > tT) {
 
         for(int i = 0; i < nI; i++) {
 
@@ -391,16 +391,16 @@ vector<Vertex> sa(vector<Vertex> &vp,
         } // for loop end
 
 
-        chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
-        int elapsed_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();        
-
-        fprintf(stderr, "---->   ===   <----");
-        fprintf(stderr, "T = %f\n", T);
-        fprintf(stderr, "maximal_score = %f\n", maximal_score);
-        fprintf(stderr, "Time: %d ms\n", elapsed_time);
-
         T = T*tdr;
     } // while loop end
+
+    chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
+    int elapsed_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();        
+
+    fprintf(stderr, "---->   ===   <----");
+    fprintf(stderr, "T = %f\n", T);
+    fprintf(stderr, "maximal_score = %f\n", maximal_score);
+    fprintf(stderr, "Time: %f s\n", (double)elapsed_time/1000000.0);
 
     return optimal_solution;
 
