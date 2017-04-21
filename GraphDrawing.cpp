@@ -184,6 +184,25 @@ void update_ratios(int &vi, double &min_ratio, double &max_ratio, vector<vector<
 }
 
 
+double vertex_score(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
+
+    double ratio_sum = 0.0;
+
+    for(int j = 0; j < bal[vi].size(); j++) {
+            int vo = bal[vi][j].vo;
+            int vd = bal[vi][j].vd;
+
+            double desired_w = bal[vi][j].w;
+            double current_w = amr[vo][vd];
+            double ratio = current_w/desired_w;
+
+            ratio_sum = ratio_sum + ratio;
+    }
+
+    return abs(ratio_sum - 1.0);
+}
+
+
 double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
 
     // Calculates the overall score given am amr.
@@ -315,7 +334,10 @@ inline double metropolis_ratio(double &ns, double &os, double &T) {
     // os - old score
     // T - temperature
 
-    return exp( (ns - os) / T );
+    // ns - os when we maximize
+    // os - ns when we minimize
+
+    return exp( (os - ns) / T );
 }
 
 
@@ -339,12 +361,12 @@ vector<Vertex> sa(vector<Vertex> &vp,
     double T = 10.0; // temperature
     double tT = 0.1; // termination temperature
     double tdr = 0.5; // temperature decrease rate    
-    double nI = 10000; // number of iterations per temperature step
+    double nI = 100000; // number of iterations per temperature step
 
-    double os = calculate_score(amr, bal); // old score
-    double maximal_score = 0.0;
+    //double os = calculate_score(amr, bal); // old score
+    vector<double> minimal_score(N, numeric_limits<double>::max());
 
-    //fprintf(stderr, "maximal_score = %f\n", maximal_score);
+    //fprintf(stderr, "minimal_score = %f\n", minimal_score);
 
     chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
     while(T > tT) {
@@ -355,6 +377,8 @@ vector<Vertex> sa(vector<Vertex> &vp,
             int ox = vp[vi].x;
             int oy = vp[vi].y;
 
+            double os = vertex_score(vi, amr, bal);
+
             bool made_move = random_vertex_position_update(vp[vi], vm, lb, rb);
 
             if (made_move == true)            
@@ -362,7 +386,10 @@ vector<Vertex> sa(vector<Vertex> &vp,
             else
                 continue;
 
-            double ns = calculate_score(amr, bal);
+            double ns = vertex_score(vi, amr, bal);
+            //fprintf(stderr, "%f\n", vs);
+
+            //double ns = calculate_score(amr, bal);
             double p = metropolis_ratio(ns, os, T);
 
             if ( p > uniform(g) ) {
@@ -370,8 +397,8 @@ vector<Vertex> sa(vector<Vertex> &vp,
                 os = ns;
 
                 // Update optimal solution                 
-                if ( maximal_score < ns ) {
-                    maximal_score = ns;
+                if ( minimal_score[vi] > ns ) {
+                    minimal_score[vi] = ns;
                     optimal_solution = vp;
                 }
      
@@ -399,7 +426,7 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
     fprintf(stderr, "---->   ===   <----");
     fprintf(stderr, "T = %f\n", T);
-    fprintf(stderr, "maximal_score = %f\n", maximal_score);
+    //fprintf(stderr, "minimal_score = %f\n", minimal_score);
     fprintf(stderr, "Time: %f s\n", (double)elapsed_time/1000000.0);
 
     return optimal_solution;
