@@ -29,8 +29,9 @@ class Edge {
         int vo; // origin
         int vd; // destination
         double w; // weight
+        int id;
         Edge() {}
-        Edge(int to, int td, double tw) : vo(to), vd(td), w(tw) {} 
+        Edge(int to, int td, double tw, int tid = -1) : vo(to), vd(td), w(tw), id(tid) {} 
 };
 
 
@@ -89,13 +90,14 @@ void base_adjacency_list_rep(vector<vector<Edge>> &bal, vector<int> &edges) {
     // provided edges (edges).
     // The constructed bal is used as a reference 
     // throughout the entire solution.
-
+    int id = 0;
     for(int i = 0; i < edges.size(); i = i + 3) {
         int vo = edges[i + 0];
         int vd = edges[i + 1];
         double w = edges[i + 2];        
-        bal[vo].push_back(Edge(vo, vd, w));
-        bal[vd].push_back(Edge(vd, vo, w));
+        bal[vo].push_back(Edge(vo, vd, w, id));
+        bal[vd].push_back(Edge(vd, vo, w, id));
+        id++;
     }
 
 }
