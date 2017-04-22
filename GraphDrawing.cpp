@@ -37,13 +37,13 @@ class Edge {
 void print_adjacency_list(vector<vector<Edge>> &al, bool verbose_mode = VERBOSE_MODE) {
 
     if (verbose_mode == true) {
-        fprintf(stderr, "Printing adjacency list...\n");
+        //fprintf(stderr, "Printing adjacency list...\n");
         for(int i = 0; i < al.size(); i++) {
-            fprintf(stderr, "Vertex %d: ", i);
+            //fprintf(stderr, "Vertex %d: ", i);
             for(int j = 0; j < al[i].size(); j++) {
-                fprintf(stderr, "%d -> %d (%f); ", al[i][j].vo, al[i][j].vd, al[i][j].w);
+                //fprintf(stderr, "%d -> %d (%f); ", al[i][j].vo, al[i][j].vd, al[i][j].w);
             }
-            fprintf(stderr, "\n");
+            //fprintf(stderr, "\n");
         }
     } else {}
 }
@@ -52,12 +52,12 @@ void print_adjacency_list(vector<vector<Edge>> &al, bool verbose_mode = VERBOSE_
 void print_matrix(vector<vector<double>> &mr, bool verbose_mode = VERBOSE_MODE) {
 
     if (verbose_mode == true) {
-        fprintf(stderr, "Printing matrix...\n");
+        //fprintf(stderr, "Printing matrix...\n");
         for(int i = 0; i < mr.size(); i++) {
             for(int j = 0; j < mr[i].size(); j++) {
-                fprintf(stderr, "%4.2f ", mr[i][j]);
+                //fprintf(stderr, "%4.2f ", mr[i][j]);
             }
-            fprintf(stderr, "\n");
+            //fprintf(stderr, "\n");
         }
     } else {}
 }
@@ -218,6 +218,25 @@ double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
 }
 
 
+double calculate_partial_score(int &step, vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
+
+    // Calculates the overall score given am amr.
+    
+    double min_ratio = numeric_limits<double>::max();
+    double max_ratio = -1.0*numeric_limits<double>::max();
+
+    // Loop over vertexes.
+    //fprintf(stderr, "i: ");
+    for(int i = 0; i < bal.size(); i = i + step) {
+        //fprintf(stderr, "%d ", i);
+        update_ratios(i, min_ratio, max_ratio, amr, bal);
+    }
+    //fprintf(stderr, "\n");
+    
+    return min_ratio/max_ratio;
+}
+
+
 void initialize_vertex_positions(vector<Vertex> &vp, vector<vector<bool>> &vm) {
 
     // Assign random positions to the vertexes.
@@ -281,11 +300,16 @@ bool random_vertex_position_update(Vertex &v, vector<vector<bool>> &vm, int &lb,
     int dx = uid(g);
     int dy = uid(g);
 
+    //fprintf(stderr, "dx %d dy %d\n", dx, dy);
+    //fprintf(stderr, "v.x %d v.y %d\n", v.x, v.y);
+
     if ((dx == 0) && (dy == 0))
         return false;
 
     int nx = v.x + dx;
     int ny = v.y + dy;
+
+    //fprintf(stderr, "%d %d\n", nx, ny);
 
     if ((nx > BOARD_SIZE - 1) || (nx < 0))
         return false;
@@ -294,6 +318,8 @@ bool random_vertex_position_update(Vertex &v, vector<vector<bool>> &vm, int &lb,
         return false;
     
     bool apv = approve_visit(v.x, v.y, nx, ny, vm);
+
+    ////fprintf(stderr, "%d\n", apv);
 
     if (apv == true) {
         v.x = nx;
@@ -350,6 +376,7 @@ vector<Vertex> sa(vector<Vertex> &vp,
                   int &rb) {
     
     int N = vp.size();
+    int step = (int)(10) + 1;
     vector<Vertex> optimal_solution(vp); // optimal solution
 
     random_device rd;
@@ -360,46 +387,80 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
     double T = 10.0; // temperature
     double tT = 0.1; // termination temperature
-    double tdr = 0.5; // temperature decrease rate    
-    double nI = 100000; // number of iterations per temperature step
+    double tdr = 0.7; // temperature decrease rate    
+    double nI = 10000; // number of iterations per temperature step
 
     //double os = calculate_score(amr, bal); // old score
-    vector<double> minimal_score(N, numeric_limits<double>::max());
+    //vector<double> minimal_score(N, numeric_limits<double>::max());
 
-    //fprintf(stderr, "minimal_score = %f\n", minimal_score);
+    double minimal_score = 0.0;
+
+    ////fprintf(stderr, "minimal_score = %f\n", minimal_score);
 
     chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
     while(T > tT) {
 
         for(int i = 0; i < nI; i++) {
 
-            int vi = choose_vertex(g);            
-            int ox = vp[vi].x;
-            int oy = vp[vi].y;
+            //fprintf(stderr, "i = %d\n", i);
 
-            double os = vertex_score(vi, amr, bal);
+            int n_v = 1;
+            vector<int> vi_vec(n_v, 0);
+            vector<int> ox_vec(n_v, 0);
+            vector<int> oy_vec(n_v, 0);
+            double os = 0.0;
+            double ns = 0.0;
 
-            bool made_move = random_vertex_position_update(vp[vi], vm, lb, rb);
+            for(int k = 0; k < n_v; k++) {
 
-            if (made_move == true)            
-                update_vertex_matrix_rep(vi, amr, bal, vp);
-            else
-                continue;
+                vi_vec[k] = choose_vertex(g);
+                ox_vec[k] = vp[vi_vec[k]].x;
+                oy_vec[k] = vp[vi_vec[k]].y;
 
-            double ns = vertex_score(vi, amr, bal);
-            //fprintf(stderr, "%f\n", vs);
+                os = os + vertex_score(vi_vec[k], amr, bal);            
+                int indext = 0;
 
+                while(true) {
+                    indext++;
+                    if (indext >= 5)
+                        break;
+
+                    ////fprintf(stderr, "Making move...\n");
+                    bool made_move = random_vertex_position_update(vp[vi_vec[k]], vm, lb, rb);
+
+                    if (made_move == true) {          
+                        update_vertex_matrix_rep(vi_vec[k], amr, bal, vp);
+                        ns = ns + vertex_score(vi_vec[k], amr, bal);
+                        break;
+                    } else
+                        continue;
+                }
+            ////fprintf(stderr, "%f\n", vs);
+            }
+
+            os = os/n_v;
+            ns = ns/n_v;
+
+
+            //fprintf(stderr, "os: %f, ns: %f\n", os, ns);
             //double ns = calculate_score(amr, bal);
             double p = metropolis_ratio(ns, os, T);
 
+            //fprintf(stderr, "new in vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
             if ( p > uniform(g) ) {
 
-                os = ns;
-
-                // Update optimal solution                 
-                if ( minimal_score[vi] > ns ) {
-                    minimal_score[vi] = ns;
+                // Update optimal solution
+                
+                //fprintf(stderr, "Here\n");
+                //double partial_score = calculate_partial_score(step, amr, bal);
+                //double partial_score = calculate_score(amr, bal);       
+                //fprintf(stderr, "There\n");       
+                //fprintf(stderr, "after partial score new in vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
+                //if ( minimal_score < partial_score ) {
+                if ( ns < os ) {
+                    //minimal_score = partial_score;
                     optimal_solution = vp;
+                    //fprintf(stderr, "in if new in vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
                 }
      
             } else {
@@ -407,26 +468,32 @@ vector<Vertex> sa(vector<Vertex> &vp,
                 // Revert back to old state.
 
                 // Revert true/false in vm.
-                approve_visit(vp[vi].x, vp[vi].y, ox, oy, vm);
-                vp[vi].x = ox;
-                vp[vi].y = oy;
-                update_vertex_matrix_rep(vi, amr, bal, vp);
+                for(int k = 0; k < n_v; k++) {
 
+                    approve_visit(vp[vi_vec[k]].x, vp[vi_vec[k]].y, ox_vec[k], oy_vec[k], vm);
+                    vp[vi_vec[k]].x = ox_vec[k];
+                    vp[vi_vec[k]].y = oy_vec[k];
+                    update_vertex_matrix_rep(vi_vec[k], amr, bal, vp);
+
+                }
 
             } // outer if end
 
+
+            //fprintf(stderr, "end of for loop vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
         } // for loop end
 
 
         T = T*tdr;
+        fprintf(stderr, "---->   ===   <----");
+        fprintf(stderr, "T = %f\n", T);
+
     } // while loop end
 
     chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
     int elapsed_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();        
 
-    fprintf(stderr, "---->   ===   <----");
-    fprintf(stderr, "T = %f\n", T);
-    //fprintf(stderr, "minimal_score = %f\n", minimal_score);
+    ////fprintf(stderr, "minimal_score = %f\n", minimal_score);
     fprintf(stderr, "Time: %f s\n", (double)elapsed_time/1000000.0);
 
     return optimal_solution;
@@ -502,31 +569,31 @@ class GraphDrawing {
             print_matrix(amr);
 
             double score = calculate_score(amr, bal);
-            fprintf(stderr, "-----\n"); 
-            fprintf(stderr, "Score = %4.16f\n", score);
-            fprintf(stderr, "Score = %4.16f\n", score);
-            fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "-----\n"); 
+            //fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "Score = %4.16f\n", score);
 
             index = 3;
             random_vertex_move(index, amr, bal, vp, vm);
             score = calculate_score(amr, bal);
-            fprintf(stderr, "-----\n"); 
-            fprintf(stderr, "Score = %4.16f\n", score);
-            fprintf(stderr, "Score = %4.16f\n", score);
-            fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "-----\n"); 
+            //fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "Score = %4.16f\n", score);
 
             int nx = 699;
             int ny = 699;
             deterministic_vertex_move(index, nx, ny, amr, bal, vp, vm); 
             score = calculate_score(amr, bal);
-            fprintf(stderr, "-----\n");            
-            fprintf(stderr, "Score = %4.16f\n", score);
-            fprintf(stderr, "Score = %4.16f\n", score);
-            fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "-----\n");            
+            //fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "Score = %4.16f\n", score);
+            //fprintf(stderr, "Score = %4.16f\n", score);
             */
 
-            int lb = -10;
-            int rb = 10;
+            int lb = -1;
+            int rb = 1;
             vector<Vertex> optimal_solution = sa(vp, amr, bal, vm, lb, rb);
 
             vector<int> ret(2*N);

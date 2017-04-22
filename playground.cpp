@@ -3,10 +3,13 @@
 #include <map>
 #include <algorithm>
 #include <random>
+#include <iostream>
 
 const double EPSILON = 1e-4;
 
 using namespace std;
+
+
 
 
 class Ratio {
@@ -117,6 +120,18 @@ void print_multiset(multiset<Ratio> &ms) {
 }
 
 
+void print_vecs(vector<Ratio> &vec, vector<Ratio*> &pvec) {
+
+    printf("Vec\n");
+    for(int i = 0; i < vec.size(); i++)
+        cout << vec[i].id << " -- " << vec[i].r << endl;
+
+    printf("pVec\n");
+    for(int i = 0; i < vec.size(); i++)
+        cout << pvec[i]->id << " -- " << pvec[i]->r << endl;
+}
+
+
 int main() {
 
     multiset<Ratio> ts {Ratio(0, 0.5), Ratio(1, 0.7), Ratio(2, 0.55), Ratio(3, 0.2), Ratio(4, 0.5)};
@@ -148,6 +163,33 @@ int main() {
 
     printf("Updating ratio...\n");
     print_multiset(ms);
+
+
+    printf("---> Pointer check <---\n");
+    vector<Ratio> vec {Ratio(1, 0.4), Ratio(2, 0.5), Ratio(3, 0.3), Ratio(4, 0.45), Ratio(5, 0.1)};
+    vector<Ratio*> pvec(vec.size());
+
+    for(int i = 0; i < vec.size(); i++)
+        pvec[i] = &vec[i];
+
+    printf("Before sorting...");
+    print_vecs(vec, pvec);
+
+    printf("--> Sorting <--\n");
+    auto cf = [](const Ratio *r1, const Ratio *r2){ return r1->r < r2->r; };
+    sort(pvec.begin(), pvec.end(), cf);
+
+    print_vecs(vec, pvec);
+
+    printf("Changing one element...");
+    vec[2].r = 0.475;
+
+    print_vecs(vec, pvec);
+
+    printf("--> Sorting one more time <--\n");
+    sort(pvec.begin(), pvec.end(), cf);
+
+    print_vecs(vec, pvec);
 
 }
 
