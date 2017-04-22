@@ -7,6 +7,7 @@
 #include <random>
 #include <limits>
 #include <chrono>
+#include <array>
 
 const int BOARD_SIZE = 700;
 const bool VERBOSE_MODE = false;
@@ -71,20 +72,11 @@ void print_matrix(vector<vector<double>> &mr, bool verbose_mode = VERBOSE_MODE) 
     } else {}
 }
 
-double distance(Vertex &vo, Vertex &vd) {
+inline double distance(Vertex &vo, Vertex &vd) {
 
-    // Get distance between two vertexes.
+    // Get Euclidean distance between two vertexes.
 
-    int vox = vo.x;
-    int voy = vo.y;
-
-    int vdx = vd.x;
-    int vdy = vd.y;
-
-    double dx2 = (vox - vdx)*(vox - vdx);
-    double dy2 = (voy - vdy)*(voy - vdy);
-
-    double d = sqrt( dx2 + dy2 );
+    double d = sqrt( (vo.x - vd.x)*(vo.x - vd.x) + (vo.y - vd.y)*(vo.y - vd.y) );
     //double d = abs(vox - vdx) + abs(voy - vdy);
     return d;
 }
@@ -127,145 +119,8 @@ void update_ratio_array(int &vi, vector<double> &ratio_array, vector<vector<Edge
 
 void fill_ratio_array(vector<double> &ratio_array, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
-    for(int vi = 0; vi < vp.size(); vi++) {
+    for(int vi = 0; vi < vp.size(); vi++)
         update_ratio_array(vi, ratio_array, bal, vp);
-    }
-}
-
-
-void base_matrix_rep(vector<vector<double>> &bmr, vector<int> &edges) {
-
-    // Construct a base matrix representation of a graph.
-    // This function is used only for the initial graph i. e.
-    // it uses the provided number of vertexes (N) and the
-    // provided edges (edges).
-
-    for(int i = 0; i < edges.size(); i = i + 3){
-        int vo = edges[i + 0];
-        int vd = edges[i + 1];
-        double w = edges[i + 2];
-
-        bmr[vo][vd] = w;
-        bmr[vd][vo] = w;
-    }
-
-}
-
-
-void adjustable_matrix_rep(vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
-
-    // Construct a adjustable matrix representation (amr) of a graph.
-    // In our solution we will try to adjust the amr so it resembles
-    // bmr as close as possible.
-    // bal is necessary because we need to know which values of the
-    // matrix to fill.
-
-    for(int i = 0; i < bal.size(); i++) {
-        for(int j = 0; j < bal[i].size(); j++) {
-            int vo = bal[i][j].vo;
-            int vd = bal[i][j].vd;
-
-            double w = distance(vp[vo], vp[vd]);
-            amr[vo][vd] = w;
-        }
-    }
-
-}
-
-
-void update_vertex_matrix_rep(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
-
-    // update performed for a single vertex!
-
-    // This function assumes that the state of vp has changed.
-    // The position of one vertex (vi) has changed in vp.
-    // The corresponding weights in amr have to be updated.
-    // This function performs the required update.
-    // In its operation it is analogous to
-    // update_vertex_adjustable_adjacency_list.
-
-    for(int i = 0; i < bal[vi].size(); i++) {
-        int vo = bal[vi][i].vo;
-        int vd = bal[vi][i].vd;
-
-        double d = distance(vp[vo], vp[vd]);
-        amr[vo][vd] = d;
-        amr[vd][vo] = d;
-    }
-}
-
-
-void update_ratios(int &vi, double &min_ratio, double &max_ratio, vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
-
-    //Updates the min_ratio and max_ratio for a given vi vertex.
-
-    // Loop over edges of the vi vertex.
-    for(int j = 0; j < bal[vi].size(); j++) {
-            int vo = bal[vi][j].vo;
-            int vd = bal[vi][j].vd;
-
-            double desired_w = bal[vi][j].w;
-            double current_w = amr[vo][vd];
-            double ratio = current_w/desired_w;
-
-            if (min_ratio > ratio)
-                min_ratio = ratio;
-            if (max_ratio < ratio)
-                max_ratio = ratio;
-    }
-}
-
-
-double vertex_score(int &vi, vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
-
-    double ratio_sum = 0.0;
-
-    for(int j = 0; j < bal[vi].size(); j++) {
-            int vo = bal[vi][j].vo;
-            int vd = bal[vi][j].vd;
-
-            double desired_w = bal[vi][j].w;
-            double current_w = amr[vo][vd];
-            double ratio = current_w/desired_w;
-
-            ratio_sum = ratio_sum + ratio;
-    }
-
-    return abs(ratio_sum - 1.0);
-}
-
-
-double calculate_score(vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
-
-    // Calculates the overall score given am amr.
-    
-    double min_ratio = numeric_limits<double>::max();
-    double max_ratio = -1.0*numeric_limits<double>::max();
-
-    // Loop over vertexes.
-    for(int i = 0; i < bal.size(); i++)
-        update_ratios(i, min_ratio, max_ratio, amr, bal);
-
-    return min_ratio/max_ratio;
-}
-
-
-double calculate_partial_score(int &step, vector<vector<double>> &amr, vector<vector<Edge>> &bal) {
-
-    // Calculates the overall score given am amr.
-    
-    double min_ratio = numeric_limits<double>::max();
-    double max_ratio = -1.0*numeric_limits<double>::max();
-
-    // Loop over vertexes.
-    //fprintf(stderr, "i: ");
-    for(int i = 0; i < bal.size(); i = i + step) {
-        //fprintf(stderr, "%d ", i);
-        update_ratios(i, min_ratio, max_ratio, amr, bal);
-    }
-    //fprintf(stderr, "\n");
-    
-    return min_ratio/max_ratio;
 }
 
 
@@ -420,93 +275,71 @@ vector<Vertex> sa(vector<Vertex> &vp,
     double T = 10.0; // temperature
     double tT = 0.1; // termination temperature
     double tdr = 0.7; // temperature decrease rate    
-    double nI = 100000; // number of iterations per temperature step
-
-    //double os = calculate_score(amr, bal); // old score
-    //vector<double> minimal_score(N, numeric_limits<double>::max());
+    double nI = 10000; // number of iterations per temperature step
 
     auto minmax_os = minmax_element(ratio_array.begin(), ratio_array.end());
     double os = (*minmax_os.first)/(*minmax_os.second);
     double minimal_score = 0.0;
 
-    ////fprintf(stderr, "minimal_score = %f\n", minimal_score);
+    fprintf(stderr, "start os: %f\n", os);
 
     chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
     while(T > tT) {
 
-        for(int i = 0; i < nI; i++) {
+        for(int i = 0; i < nI; ++i) {
 
-            //fprintf(stderr, "i = %d\n", i);
+            //chrono::high_resolution_clock::time_point t11 = chrono::high_resolution_clock::now();
 
-            chrono::high_resolution_clock::time_point t11 = chrono::high_resolution_clock::now();
-
-            int n_v = 1;
+            int n_v = 3;
             vector<int> vi_vec(n_v, 0);
             vector<int> ox_vec(n_v, 0);
             vector<int> oy_vec(n_v, 0);
 
-            for(int k = 0; k < n_v; k++) {
+            for(int k = 0; k < n_v; ++k) {
 
                 vi_vec[k] = choose_vertex(g);
                 ox_vec[k] = vp[vi_vec[k]].x;
                 oy_vec[k] = vp[vi_vec[k]].y;
            
-
                 while(true) {
-
-                    ////fprintf(stderr, "Making move...\n");
                     bool made_move = random_vertex_position_update(vp[vi_vec[k]], vm, lb, rb);
 
                     if (made_move == true) {          
-                        //update_vertex_matrix_rep(vi_vec[k], amr, bal, vp);
                         update_ratio_array(vi_vec[k], ratio_array, bal, vp);
                         break;
                     } else
                         continue;
                 }
-            ////fprintf(stderr, "%f\n", vs);
             }
 
-            chrono::high_resolution_clock::time_point t22 = chrono::high_resolution_clock::now();
-            int elapsed_time2211 = chrono::duration_cast<chrono::microseconds>( t22 - t11 ).count();        
+            //chrono::high_resolution_clock::time_point t22 = chrono::high_resolution_clock::now();
+            //int elapsed_time2211 = chrono::duration_cast<chrono::microseconds>( t22 - t11 ).count();        
             //fprintf(stderr, "Time 2211: %f s\n", (double)elapsed_time2211/1000000.0);
 
 
-            chrono::high_resolution_clock::time_point t111 = chrono::high_resolution_clock::now();
+            //chrono::high_resolution_clock::time_point t111 = chrono::high_resolution_clock::now();
+
             auto minmax_ns = minmax_element(ratio_array.begin(), ratio_array.end());
             double ns = (*minmax_ns.first)/(*minmax_ns.second);
 
-            chrono::high_resolution_clock::time_point t222 = chrono::high_resolution_clock::now();
-            int elapsed_time222111 = chrono::duration_cast<chrono::microseconds>( t222 - t111 ).count();        
+            //chrono::high_resolution_clock::time_point t222 = chrono::high_resolution_clock::now();
+            //int elapsed_time222111 = chrono::duration_cast<chrono::microseconds>( t222 - t111 ).count();        
             //fprintf(stderr, "Time 222111: %f s\n", (double)elapsed_time222111/1000000.0);
 
-            //fprintf(stderr, "os: %f, ns: %f\n", os, ns);
-            //double ns = calculate_score(amr, bal);
             double p = metropolis_ratio(ns, os, T);
 
-            //fprintf(stderr, "new in vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
             if ( p > uniform(g) ) {
 
                 // Update optimal solution
-                
-                //fprintf(stderr, "Here\n");
-                //double partial_score = calculate_partial_score(step, amr, bal);
-                //double partial_score = calculate_score(amr, bal);       
-                //fprintf(stderr, "There\n");       
-                //fprintf(stderr, "after partial score new in vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
                 if ( minimal_score < ns ) {
-                //if ( ns < os ) {
                     minimal_score = ns;
                     optimal_solution = vp;
-                    //fprintf(stderr, "in if new in vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
                 }
      
             } else {
                 // New state not accepted.
                 // Revert back to old state.
-
-                // Revert true/false in vm.
-                for(int k = 0; k < n_v; k++) {
+                for(int k = 0; k < n_v; ++k) {
 
                     approve_visit(vp[vi_vec[k]].x, vp[vi_vec[k]].y, ox_vec[k], oy_vec[k], vm);
                     vp[vi_vec[k]].x = ox_vec[k];
@@ -518,8 +351,6 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
             } // outer if end
 
-
-            //fprintf(stderr, "end of for loop vp; %d, %d\n", vp[vi_vec[0]].x, vp[vi_vec[0]].y );
         } // for loop end
 
 
@@ -532,7 +363,7 @@ vector<Vertex> sa(vector<Vertex> &vp,
     chrono::high_resolution_clock::time_point t2 = chrono::high_resolution_clock::now();
     int elapsed_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();        
 
-    ////fprintf(stderr, "minimal_score = %f\n", minimal_score);
+    fprintf(stderr, "minimal_score = %f\n", minimal_score);
     fprintf(stderr, "Time: %f s\n", (double)elapsed_time/1000000.0);
 
     return optimal_solution;
@@ -557,15 +388,6 @@ class GraphDrawing {
     public:
         vector<int> plot(int N, vector<int> edges) {
 
-            // bmr - base matrix representation of the graph
-            // This is the matrix representation that we are trying
-            // to achive.
-            //vector<vector<double>> bmr(N, vector<double>(N, 0.0));
-
-            //base_matrix_rep(bmr, edges);
-            //print_matrix(bmr);
-
-
             //vp - vertex positions
             vector<Vertex> vp(N);
 
@@ -587,61 +409,6 @@ class GraphDrawing {
             fill_ratio_array(ratio_array, bal, vp);
             //print_vector(ratio_array);
 
-            //auto minmax = minmax_element(ratio_array.begin(), ratio_array.end());
-            //cerr << "Min: " << *(minmax.first) << endl;
-            //cerr << "Max: " << *(minmax.second) << endl;
-
-
-            //Adjustable matrix
-            //vector<vector<double>> amr(N, vector<double>(N, 0.0));
-            //adjustable_matrix_rep(amr, bal, vp);
-            //print_matrix(amr);
-
-            /*
-            // Changeing the position of vertex 3.
-            int index = 4;
-            vp[index].x = 100;
-            vp[index].y = 200;
-            //update_vertex_adjustable_adjacency_list(index, aal, vp);
-            //print_adjacency_list(aal);
-            update_vertex_matrix_rep(index, amr, bal, vp);
-            print_matrix(amr);
-
-
-            vector<int> vua = {0, 1};
-            vp[vua[0]].x = 300;
-            vp[vua[0]].y = 300;
-            vp[vua[1]].x = 400;
-            vp[vua[1]].y = 400;
-            //update_adjustable_adjacency_list(vua, aal, vp);
-            //print_adjacency_list(aal);
-            update_matrix_rep(vua, amr, bal, vp);
-            print_matrix(amr);
-
-            double score = calculate_score(amr, bal);
-            //fprintf(stderr, "-----\n"); 
-            //fprintf(stderr, "Score = %4.16f\n", score);
-            //fprintf(stderr, "Score = %4.16f\n", score);
-            //fprintf(stderr, "Score = %4.16f\n", score);
-
-            index = 3;
-            random_vertex_move(index, amr, bal, vp, vm);
-            score = calculate_score(amr, bal);
-            //fprintf(stderr, "-----\n"); 
-            //fprintf(stderr, "Score = %4.16f\n", score);
-            //fprintf(stderr, "Score = %4.16f\n", score);
-            //fprintf(stderr, "Score = %4.16f\n", score);
-
-            int nx = 699;
-            int ny = 699;
-            deterministic_vertex_move(index, nx, ny, amr, bal, vp, vm); 
-            score = calculate_score(amr, bal);
-            //fprintf(stderr, "-----\n");            
-            //fprintf(stderr, "Score = %4.16f\n", score);
-            //fprintf(stderr, "Score = %4.16f\n", score);
-            //fprintf(stderr, "Score = %4.16f\n", score);
-            */
-
             int lb = -50;
             int rb = 50;
             vector<Vertex> optimal_solution = sa(vp, ratio_array, bal, vm, lb, rb);
@@ -651,6 +418,8 @@ class GraphDrawing {
             return ret;
         }
 };
+
+
 // -------8<------- end of solution submitted to the website -------8<-------
 
 template<class T> void getVector(vector<T>& v) {
