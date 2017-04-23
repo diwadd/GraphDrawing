@@ -27,11 +27,20 @@ class Vertex {
 
 class Edge {
     public:
+        int vo;
         int vd; // destination
         double w; // weight
         int id;
         Edge() {}
-        Edge(int td, double tw, int tid = -1) : vd(td), w(tw), id(tid) {} 
+        Edge(int to, int td, double tw, int tid = -1) : vo(to), vd(td), w(tw), id(tid) {} 
+};
+
+
+class Ratio : public Edge {
+    public:
+        double r;
+        Ratio() {};
+        Ratio(double tr, int to, int td, double tw, int tid = -1): r(tr) { Edge(to, td, tw, tid); }
 };
 
 
@@ -94,28 +103,33 @@ void base_adjacency_list_rep(vector<vector<Edge>> &bal, vector<int> &edges) {
         int vo = edges[i + 0];
         int vd = edges[i + 1];
         double w = edges[i + 2];        
-        bal[vo].push_back(Edge(vd, w, id));
-        bal[vd].push_back(Edge(vo, w, id));
+        bal[vo].push_back(Edge(vo, vd, w, id));
+        bal[vd].push_back(Edge(vd, vo, w, id));
         id++;
     }
 
 }
 
 
-void update_ratio_array(int &vi, vector<double> &ratio_array, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
+void update_ratio_array(int &vi, vector<Ratio> &ratio_array, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
     for(int i = 0; i < bal[vi].size(); i++) {
+        int vo = bal[vi][i].vo;
         int vd = bal[vi][i].vd;
         double w = bal[vi][i].w;
         int id = bal[vi][i].id;
 
         double ratio = distance(vp[vi], vp[vd])/w;
-        ratio_array[id] = ratio;
+        ratio_array[id].r = ratio;
+        ratio_array[id].vo = vo;
+        ratio_array[id].vd = vd;
+        ratio_array[id].w = w;
+        ratio_array[id].id = id;
     }
 }
 
 
-void fill_ratio_array(vector<double> &ratio_array, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
+void fill_ratio_array(vector<Ratio> &ratio_array, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
     for(int vi = 0; vi < vp.size(); vi++)
         update_ratio_array(vi, ratio_array, bal, vp);
@@ -325,7 +339,7 @@ inline double metropolis_ratio(double &ns, double &os, double &T) {
 
 
 vector<Vertex> sa(vector<Vertex> &vp, 
-                  vector<double> &ratio_array, 
+                  vector<Ratio> &ratio_array, 
                   vector<vector<Edge>> &bal,
                   vector<vector<bool>> &vm,
                   int &lb,
@@ -338,6 +352,7 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
     random_device rd;
     mt19937 g(rd());
+    uniform_int_distribution<> point_switch(0, 60);    
     uniform_int_distribution<> move_switch(0, npm - 1);
     uniform_int_distribution<> choose_vertex(0, N - 1);
     uniform_int_distribution<> choose_grid_coordinate(0, N - 1);
@@ -346,13 +361,26 @@ vector<Vertex> sa(vector<Vertex> &vp,
     double T = 100.0; // temperature
     double tT = 1.0; // termination temperature
     double tdr = 0.7; // temperature decrease rate    
-    double nI = 10000; // number of iterations per temperature step
+    double nI = 7000; // number of iterations per temperature step
 
-    auto minmax_os = minmax_element(ratio_array.begin(), ratio_array.end());
-    double os = (*minmax_os.first)/(*minmax_os.second);
+    auto ratio_compare = [](const Ratio &r1, const Ratio &r2) {
+                                return r1.r < r2.r;
+                              };
+
+    auto p_ratio_compare = [](const Ratio *r1, const Ratio *r2) {
+                                return r1->r < r2->r;
+                              };
+
+
+    auto minmax_os = minmax_element(ratio_array.begin(), ratio_array.end(), ratio_compare);
+    double os = ((*minmax_os.first).r)/((*minmax_os.second).r);
     double minimal_score = 0.0;
 
     fprintf(stderr, "start os: %f\n", os);
+
+    vector<Ratio*> p_ratio_array(ratio_array.size());
+    for(int i = 0; i < ratio_array.size(); i++)
+        p_ratio_array[i] = &ratio_array[i];
 
     chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
     while(T > tT) {
@@ -361,15 +389,33 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
             //chrono::high_resolution_clock::time_point t11 = chrono::high_resolution_clock::now();
 
-            int n_v = 2;
-            double std = 100.0;
+            int n_v = 4;
+            double std = 125.0;
             vector<int> vi_vec(n_v, 0);
             vector<int> ox_vec(n_v, 0);
             vector<int> oy_vec(n_v, 0);
 
+
+
+            //auto minmax_vi = minmax_element(ratio_array.begin(), ratio_array.end(), ratio_compare);
+            //vi_vec[0] = (*minmax_vi.first).vo;
+            //vi_vec[1] = (*minmax_vi.second).vo;
+
+            sort(p_ratio_array.begin(), p_ratio_array.end(), p_ratio_compare);
+            vi_vec[0] = p_ratio_array[0]->vo;
+            vi_vec[1] = p_ratio_array[p_ratio_array.size() - 1]->vo;
+
+            vi_vec[2] = p_ratio_array[1]->vo;
+            vi_vec[3] = p_ratio_array[p_ratio_array.size() - 2]->vo;
+
+            //fprintf(stderr, "vi_vec[0]: %d, vi_vec[1]: %d\n", (*minmax_vi.first).vo, (*minmax_vi.second).vo);
+
             for(int k = 0; k < n_v; ++k) {
 
-                vi_vec[k] = choose_vertex(g);
+                int coin = point_switch(g);
+                if (coin == 0)
+                    vi_vec[k] = choose_vertex(g);
+
                 ox_vec[k] = vp[vi_vec[k]].x;
                 oy_vec[k] = vp[vi_vec[k]].y;
            
@@ -379,7 +425,7 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
                     if (switch_flag == 0)
                         made_move = random_vertex_position_update(vp[vi_vec[k]], vm, lb, rb);
-                    else if (switch_flag == 1)
+                    else if (switch_flag == 1)// || switch_flag == 2)
                         made_move = center_of_mass_vertex_position_update(vi_vec[k], vp, bal, vm, std);
                     else
                         made_move = random_vertex_teleport(vp[vi_vec[k]], vm);
@@ -400,8 +446,8 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
             //chrono::high_resolution_clock::time_point t111 = chrono::high_resolution_clock::now();
 
-            auto minmax_ns = minmax_element(ratio_array.begin(), ratio_array.end());
-            double ns = (*minmax_ns.first)/(*minmax_ns.second);
+            auto minmax_ns = minmax_element(ratio_array.begin(), ratio_array.end(), ratio_compare);
+            double ns = ((*minmax_ns.first).r)/((*minmax_ns.second).r);
 
             //chrono::high_resolution_clock::time_point t222 = chrono::high_resolution_clock::now();
             //int elapsed_time222111 = chrono::duration_cast<chrono::microseconds>( t222 - t111 ).count();        
@@ -486,14 +532,7 @@ class GraphDrawing {
             print_adjacency_list(bal);
 
             int NE = (int)edges.size()/3;
-            vector<double> ratio_array(NE, -1.0);
-
-            int vi = 0;
-            double cmx = 0;
-            double cmy = 0;
-            center_of_mass(vi, cmx, cmy, vp, bal);
-            fprintf(stderr, "f: %f; s: %f\n", cmx, cmy);
-
+            vector<Ratio> ratio_array(NE, Ratio());
 
             fill_ratio_array(ratio_array, bal, vp);
             //print_vector(ratio_array);
