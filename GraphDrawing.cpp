@@ -27,12 +27,11 @@ class Vertex {
 
 class Edge {
     public:
-        int vo; // origin
         int vd; // destination
         double w; // weight
         int id;
         Edge() {}
-        Edge(int to, int td, double tw, int tid = -1) : vo(to), vd(td), w(tw), id(tid) {} 
+        Edge(int td, double tw, int tid = -1) : vd(td), w(tw), id(tid) {} 
 };
 
 
@@ -51,7 +50,7 @@ void print_adjacency_list(vector<vector<Edge>> &al, bool verbose_mode = VERBOSE_
         for(int i = 0; i < al.size(); i++) {
             fprintf(stderr, "Vertex %d: ", i);
             for(int j = 0; j < al[i].size(); j++) {
-                fprintf(stderr, "%d -> %d (%f, %d); ", al[i][j].vo, al[i][j].vd, al[i][j].w, al[i][j].id);
+                fprintf(stderr, " -> %d (%f, %d); ", al[i][j].vd, al[i][j].w, al[i][j].id);
             }
             fprintf(stderr, "\n");
         }
@@ -95,8 +94,8 @@ void base_adjacency_list_rep(vector<vector<Edge>> &bal, vector<int> &edges) {
         int vo = edges[i + 0];
         int vd = edges[i + 1];
         double w = edges[i + 2];        
-        bal[vo].push_back(Edge(vo, vd, w, id));
-        bal[vd].push_back(Edge(vd, vo, w, id));
+        bal[vo].push_back(Edge(vd, w, id));
+        bal[vd].push_back(Edge(vo, w, id));
         id++;
     }
 
@@ -106,12 +105,11 @@ void base_adjacency_list_rep(vector<vector<Edge>> &bal, vector<int> &edges) {
 void update_ratio_array(int &vi, vector<double> &ratio_array, vector<vector<Edge>> &bal, vector<Vertex> &vp) {
 
     for(int i = 0; i < bal[vi].size(); i++) {
-        int vo = bal[vi][i].vo;
         int vd = bal[vi][i].vd;
         double w = bal[vi][i].w;
         int id = bal[vi][i].id;
 
-        double ratio = distance(vp[vo], vp[vd])/w;
+        double ratio = distance(vp[vi], vp[vd])/w;
         ratio_array[id] = ratio;
     }
 }
@@ -171,6 +169,76 @@ bool approve_visit(int &ox, int &oy, int &nx, int &ny, vector<vector<bool>> &vm)
     //vm[ny][nx] = true;    
 
     return true;
+}
+
+
+void center_of_mass(int &vi, double &cmx, double &cmy, vector<Vertex> &vp, vector<vector<Edge>> &bal) {
+
+    int N = bal[vi].size();
+
+    if (N == 0)
+        return;
+
+    int xr0 = vp[vi].x;
+    int yr0 = vp[vi].y;
+
+    double total_mass = 0.0;
+    for(int i = 0; i < N; i++) {
+        int vd = bal[vi][i].vd;
+
+
+        int xri = vp[vd].x - xr0;
+        int yri = vp[vd].y - yr0;
+
+        double w = bal[vi][i].w;
+
+        double mass = distance(vp[vi], vp[vd])/w;
+
+        cmx = cmx + mass*xri;
+        cmy = cmy + mass*yri;
+
+        total_mass = total_mass + mass;
+    }
+
+    cmx = cmx/total_mass + xr0;
+    cmy = cmy/total_mass + yr0;
+}
+
+
+
+bool center_of_mass_vertex_position_update(int &vi, vector<Vertex> &vp, vector<vector<Edge>> &bal, vector<vector<bool>> &vm, double &std) {
+
+    double cmx = 0.0;
+    double cmy = 0.0;
+    center_of_mass(vi, cmx, cmy, vp, bal);
+
+    //fprintf(stderr, "cmx: %f, cmy %f\n", cmx, cmy);
+    //if ((cmx < 0) || (cmy < 0))
+    //    return false;
+
+    random_device rd;
+    mt19937 g(rd());
+    normal_distribution<> ndx(cmx, std);
+    normal_distribution<> ndy(cmy, std);
+    
+
+    int nx = (int)ndx(g);
+    if ((nx > BOARD_SIZE - 1) || (nx < 0))
+        return false;
+
+    int ny = (int)ndy(g);
+    if ((ny > BOARD_SIZE - 1) || (ny < 0))
+        return false;
+    
+    bool apv = approve_visit(vp[vi].x, vp[vi].y, nx, ny, vm);
+
+    if (apv == true) {
+        vp[vi].x = nx;
+        vp[vi].y = ny;
+        return true;
+    } else
+        return false;
+
 }
 
 
@@ -266,14 +334,17 @@ vector<Vertex> sa(vector<Vertex> &vp,
     int N = vp.size();
     vector<Vertex> optimal_solution(vp); // optimal solution
 
+    int npm = 3; // n possible moves
+
     random_device rd;
     mt19937 g(rd());
+    uniform_int_distribution<> move_switch(0, npm - 1);
     uniform_int_distribution<> choose_vertex(0, N - 1);
     uniform_int_distribution<> choose_grid_coordinate(0, N - 1);
     uniform_real_distribution<> uniform(0.0, 1.0);
 
-    double T = 10.0; // temperature
-    double tT = 0.1; // termination temperature
+    double T = 100.0; // temperature
+    double tT = 1.0; // termination temperature
     double tdr = 0.7; // temperature decrease rate    
     double nI = 10000; // number of iterations per temperature step
 
@@ -290,7 +361,8 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
             //chrono::high_resolution_clock::time_point t11 = chrono::high_resolution_clock::now();
 
-            int n_v = 3;
+            int n_v = 2;
+            double std = 100.0;
             vector<int> vi_vec(n_v, 0);
             vector<int> ox_vec(n_v, 0);
             vector<int> oy_vec(n_v, 0);
@@ -302,8 +374,17 @@ vector<Vertex> sa(vector<Vertex> &vp,
                 oy_vec[k] = vp[vi_vec[k]].y;
            
                 while(true) {
-                    bool made_move = random_vertex_position_update(vp[vi_vec[k]], vm, lb, rb);
+                    bool made_move = false;
+                    int switch_flag = move_switch(g);
 
+                    if (switch_flag == 0)
+                        made_move = random_vertex_position_update(vp[vi_vec[k]], vm, lb, rb);
+                    else if (switch_flag == 1)
+                        made_move = center_of_mass_vertex_position_update(vi_vec[k], vp, bal, vm, std);
+                    else
+                        made_move = random_vertex_teleport(vp[vi_vec[k]], vm);
+
+                    //cerr << "made_move: " << made_move << endl;
                     if (made_move == true) {          
                         update_ratio_array(vi_vec[k], ratio_array, bal, vp);
                         break;
@@ -355,8 +436,9 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
 
         T = T*tdr;
-        fprintf(stderr, "---->   ===   <----");
-        fprintf(stderr, "T = %f\n", T);
+        //fprintf(stderr, "---->   ===   <----");
+        //fprintf(stderr, "T = %f\n", T);
+        //fprintf(stderr, "minimal_score = %f\n", minimal_score);
 
     } // while loop end
 
@@ -406,11 +488,18 @@ class GraphDrawing {
             int NE = (int)edges.size()/3;
             vector<double> ratio_array(NE, -1.0);
 
+            int vi = 0;
+            double cmx = 0;
+            double cmy = 0;
+            center_of_mass(vi, cmx, cmy, vp, bal);
+            fprintf(stderr, "f: %f; s: %f\n", cmx, cmy);
+
+
             fill_ratio_array(ratio_array, bal, vp);
             //print_vector(ratio_array);
 
-            int lb = -50;
-            int rb = 50;
+            int lb = -100;
+            int rb = 100;
             vector<Vertex> optimal_solution = sa(vp, ratio_array, bal, vm, lb, rb);
 
             vector<int> ret(2*N);
