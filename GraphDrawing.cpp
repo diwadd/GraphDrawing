@@ -333,7 +333,10 @@ inline double metropolis_ratio(double &ns, double &os, double &T) {
     // ns - os when we maximize
     // os - ns when we minimize
 
-    return exp( (os - ns) / T );
+    double p = exp( (ns - os) / T );
+    //fprintf(stderr, "p: %f T: %f\n", p, T);
+
+    return p;
 }
 
 
@@ -352,25 +355,19 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
     random_device rd;
     mt19937 g(rd());
-    uniform_int_distribution<> point_switch(0, 60);    
+    uniform_int_distribution<> point_switch(0, 60);
     uniform_int_distribution<> move_switch(0, npm - 1);
     uniform_int_distribution<> choose_vertex(0, N - 1);
     uniform_int_distribution<> choose_grid_coordinate(0, N - 1);
     uniform_real_distribution<> uniform(0.0, 1.0);
 
-    double T = 100.0; // temperature
-    double tT = 1.0; // termination temperature
-    double tdr = 0.7; // temperature decrease rate    
-    double nI = 7000; // number of iterations per temperature step
+    vector<double> t_vec {0.025, 0.03, 0.035, 0.04};
+  
+    double nI = 30000; // number of iterations per temperature step
 
     auto ratio_compare = [](const Ratio &r1, const Ratio &r2) {
                                 return r1.r < r2.r;
                               };
-
-    auto p_ratio_compare = [](const Ratio *r1, const Ratio *r2) {
-                                return r1->r < r2->r;
-                              };
-
 
     auto minmax_os = minmax_element(ratio_array.begin(), ratio_array.end(), ratio_compare);
     double os = ((*minmax_os.first).r)/((*minmax_os.second).r);
@@ -378,35 +375,31 @@ vector<Vertex> sa(vector<Vertex> &vp,
 
     fprintf(stderr, "start os: %f\n", os);
 
-    vector<Ratio*> p_ratio_array(ratio_array.size());
-    for(int i = 0; i < ratio_array.size(); i++)
-        p_ratio_array[i] = &ratio_array[i];
 
     chrono::high_resolution_clock::time_point t1 = chrono::high_resolution_clock::now();
-    while(T > tT) {
+    for(int t = 0; t < t_vec.size(); t++) {
 
+        fprintf(stderr, "---->   ===   <----\n");
+        fprintf(stderr, "T = %f\n", t_vec[t]);
         for(int i = 0; i < nI; ++i) {
 
             //chrono::high_resolution_clock::time_point t11 = chrono::high_resolution_clock::now();
 
-            int n_v = 4;
-            double std = 125.0;
+            int n_v = 2;
+            double std = 200.0;
             vector<int> vi_vec(n_v, 0);
+            vector<int> vd_vec(n_v, 0);
             vector<int> ox_vec(n_v, 0);
             vector<int> oy_vec(n_v, 0);
 
 
 
-            //auto minmax_vi = minmax_element(ratio_array.begin(), ratio_array.end(), ratio_compare);
-            //vi_vec[0] = (*minmax_vi.first).vo;
-            //vi_vec[1] = (*minmax_vi.second).vo;
+            auto minmax_vi = minmax_element(ratio_array.begin(), ratio_array.end(), ratio_compare);
+            vi_vec[0] = (*minmax_vi.first).vo;
+            vd_vec[0] = (*minmax_vi.first).vd;
 
-            sort(p_ratio_array.begin(), p_ratio_array.end(), p_ratio_compare);
-            vi_vec[0] = p_ratio_array[0]->vo;
-            vi_vec[1] = p_ratio_array[p_ratio_array.size() - 1]->vo;
-
-            vi_vec[2] = p_ratio_array[1]->vo;
-            vi_vec[3] = p_ratio_array[p_ratio_array.size() - 2]->vo;
+            vi_vec[1] = (*minmax_vi.second).vo;
+            vd_vec[1] = (*minmax_vi.second).vd;
 
             //fprintf(stderr, "vi_vec[0]: %d, vi_vec[1]: %d\n", (*minmax_vi.first).vo, (*minmax_vi.second).vo);
 
@@ -415,7 +408,7 @@ vector<Vertex> sa(vector<Vertex> &vp,
                 int coin = point_switch(g);
                 if (coin == 0)
                     vi_vec[k] = choose_vertex(g);
-
+    
                 ox_vec[k] = vp[vi_vec[k]].x;
                 oy_vec[k] = vp[vi_vec[k]].y;
            
@@ -449,14 +442,17 @@ vector<Vertex> sa(vector<Vertex> &vp,
             auto minmax_ns = minmax_element(ratio_array.begin(), ratio_array.end(), ratio_compare);
             double ns = ((*minmax_ns.first).r)/((*minmax_ns.second).r);
 
+
+            //fprintf(stderr, "os: %f, ns: %f\n", os, ns);
             //chrono::high_resolution_clock::time_point t222 = chrono::high_resolution_clock::now();
             //int elapsed_time222111 = chrono::duration_cast<chrono::microseconds>( t222 - t111 ).count();        
             //fprintf(stderr, "Time 222111: %f s\n", (double)elapsed_time222111/1000000.0);
 
-            double p = metropolis_ratio(ns, os, T);
+            double p = metropolis_ratio(ns, os, t_vec[t]);
 
             if ( p > uniform(g) ) {
 
+                os = ns;
                 // Update optimal solution
                 if ( minimal_score < ns ) {
                     minimal_score = ns;
@@ -474,17 +470,12 @@ vector<Vertex> sa(vector<Vertex> &vp,
                     //update_vertex_matrix_rep(vi_vec[k], amr, bal, vp);
                     update_ratio_array(vi_vec[k], ratio_array, bal, vp);
 
-                }
+                } // inner for end
 
             } // outer if end
 
         } // for loop end
-
-
-        T = T*tdr;
-        //fprintf(stderr, "---->   ===   <----");
-        //fprintf(stderr, "T = %f\n", T);
-        //fprintf(stderr, "minimal_score = %f\n", minimal_score);
+        fprintf(stderr, "minimal_score = %f\n", minimal_score);
 
     } // while loop end
 
@@ -537,8 +528,8 @@ class GraphDrawing {
             fill_ratio_array(ratio_array, bal, vp);
             //print_vector(ratio_array);
 
-            int lb = -100;
-            int rb = 100;
+            int lb = -50;
+            int rb = 50;
             vector<Vertex> optimal_solution = sa(vp, ratio_array, bal, vm, lb, rb);
 
             vector<int> ret(2*N);
