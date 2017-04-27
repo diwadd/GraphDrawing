@@ -10,8 +10,6 @@ const double EPSILON = 1e-4;
 using namespace std;
 
 
-
-
 class Ratio {
     public:
         int id;
@@ -21,6 +19,7 @@ class Ratio {
 
         friend bool operator< (const Ratio &r1, const Ratio &r2);
 };  
+
 
 bool operator< (const Ratio &left, const Ratio &right)
 {
@@ -48,6 +47,7 @@ class RatioFinder {
         }
 
 };
+
 
 void populate_map_and_multiset(map<int, double> &m, multiset<Ratio> &ms, int &N) {
 
@@ -77,9 +77,6 @@ void populate_map_and_multiset(map<int, double> &m, multiset<Ratio> &ms, int &N)
     }
 
 }
-
-
-
 
 
 void update_ratio(double &n_r, double &o_r, map<int, double> &m, multiset<Ratio> &ms) {
